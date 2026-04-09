@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Escala de color principal: Navy profundo → poder y confianza ── */
+    --background: 210 20% 98%;       /* #F7F9FC — casi blanco cálido */
+    --foreground: 222 47% 11%;       /* #0F1729 — navy oscuro */
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary: navy profundo */
+    --primary: 222 47% 14%;          /* #141E33 */
+    --primary-foreground: 210 20% 98%;
+
+    /* Secondary: slate medio */
+    --secondary: 215 25% 27%;        /* #2F3E55 */
+    --secondary-foreground: 210 20% 98%;
+
+    /* Muted: gris suave */
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 47%; /* #6B7A8F */
+
+    /* Accent: gold apagado → premium */
+    --accent: 43 45% 54%;            /* #B89A4E */
+    --accent-foreground: 222 47% 11%;
+
+    /* Gold tokens */
+    --gold: 43 58% 52%;              /* #C4A044 */
+    --gold-foreground: 222 47% 11%;
+    --gold-muted: 43 40% 90%;        /* #F0E8D0 */
+
+    /* Semánticos */
+    --success: 152 60% 36%;          /* #24875B */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;           /* #F59E0B */
+    --warning-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 28% 88%;           /* #D8E0EC */
+    --input: 214 28% 88%;
+    --ring: 222 47% 14%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+  }
+
+  /* Scrollbar personalizada */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+}
+
+@layer components {
+  .page-container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8;
+  }
+
+  .page-header {
+    @apply mb-8 flex items-center justify-between;
+  }
+
+  .section-title {
+    @apply text-2xl font-semibold tracking-tight text-foreground;
+  }
+
+  .section-subtitle {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  /* Stat card highlight */
+  .stat-card-gold {
+    @apply border-l-4 border-l-[hsl(var(--gold))];
+  }
+
+  /* Table row hover */
+  .table-row-hover {
+    @apply transition-colors hover:bg-muted/50 cursor-pointer;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .animate-fade-in { animation: fade-in 0.3s ease-out; }
+}
