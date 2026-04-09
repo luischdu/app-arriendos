@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { readStore, writeStore, newId } from '@/lib/store';
 import { SEED_CONTRACTS } from '@/lib/seed-data';
