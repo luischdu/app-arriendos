@@ -1,4 +1,4 @@
-import { put, list, download } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 
 const PREFIX = 'arriendospro/v1';
 
@@ -9,8 +9,13 @@ export async function readStore<T>(key: string): Promise<T[]> {
     const blob = blobs.find((b) => b.pathname === `${PREFIX}/${key}.json`);
     if (!blob) return [];
 
-    // Para blobs privados usar download() del SDK
-    const res = await download(blob.url);
+    // Blobs privados requieren el token en el header Authorization
+    const res = await fetch(blob.url, {
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN ?? ''}`,
+      },
+    });
     if (!res.ok) return [];
     return (await res.json()) as T[];
   } catch {
