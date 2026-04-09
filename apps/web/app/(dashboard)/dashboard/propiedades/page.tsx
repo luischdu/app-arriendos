@@ -1,52 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { Building2, Plus, MapPin, BedDouble, Bath, Car } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { Building2, Plus, MapPin, BedDouble, Bath, Car, Loader2 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { formatCOP } from '@/lib/utils';
 
-const PROPERTIES = [
-  {
-    id: '1', code: 'AP-301', name: 'Apto 301', propertyType: 'apartamento',
-    address: 'Cra 70 #45-20, Apto 301', city: 'Medellín', department: 'Antioquia',
-    stratum: 4, areaSqm: 72, rooms: 3, bathrooms: 2, parkingSpots: 1,
-    status: 'rented', monthlyRent: 1200000,
-  },
-  {
-    id: '2', code: 'CS-001', name: 'Casa El Poblado', propertyType: 'casa',
-    address: 'Cll 10 #34-15', city: 'Medellín', department: 'Antioquia',
-    stratum: 6, areaSqm: 180, rooms: 4, bathrooms: 3, parkingSpots: 2,
-    status: 'rented', monthlyRent: 2500000,
-  },
-  {
-    id: '3', code: 'LC-105', name: 'Local 105 Centro', propertyType: 'local',
-    address: 'Av. El Dorado #22-10', city: 'Bogotá', department: 'Cundinamarca',
-    stratum: 0, areaSqm: 45, rooms: 0, bathrooms: 1, parkingSpots: 0,
-    status: 'rented', monthlyRent: 1800000,
-  },
-  {
-    id: '4', code: 'AP-202', name: 'Apto 202 Envigado', propertyType: 'apartamento',
-    address: 'Cra 43A #34-60', city: 'Envigado', department: 'Antioquia',
-    stratum: 3, areaSqm: 58, rooms: 2, bathrooms: 1, parkingSpots: 1,
-    status: 'rented', monthlyRent: 950000,
-  },
-  {
-    id: '5', code: 'AP-503', name: 'Apto 503 Laureles', propertyType: 'apartamento',
-    address: 'Cll 76 #80-12, Apto 503', city: 'Medellín', department: 'Antioquia',
-    stratum: 4, areaSqm: 65, rooms: 2, bathrooms: 2, parkingSpots: 1,
-    status: 'available', monthlyRent: 1100000,
-  },
-  {
-    id: '6', code: 'BD-001', name: 'Bodega Guayabal', propertyType: 'bodega',
-    address: 'Cra 52 #10-30', city: 'Medellín', department: 'Antioquia',
-    stratum: 0, areaSqm: 250, rooms: 0, bathrooms: 1, parkingSpots: 4,
-    status: 'maintenance', monthlyRent: 3200000,
-  },
-];
+type Property = {
+  id: string; code: string; name: string; propertyType: string;
+  address: string; city: string; department: string; stratum: number;
+  areaSqm: number; rooms: number; bathrooms: number; parkingSpots: number;
+  status: string; monthlyRent: number;
+};
 
 const STATUS_MAP: Record<string, { label: string; variant: 'success' | 'destructive' | 'warning' | 'default' }> = {
   rented: { label: 'Arrendada', variant: 'default' },
@@ -55,31 +32,63 @@ const STATUS_MAP: Record<string, { label: string; variant: 'success' | 'destruct
 };
 
 const TYPE_ICON: Record<string, string> = {
-  apartamento: 'Apto',
-  casa: 'Casa',
-  local: 'Local',
-  bodega: 'Bodega',
-  oficina: 'Oficina',
+  apartamento: 'Apto', casa: 'Casa', local: 'Local', bodega: 'Bodega', oficina: 'Oficina',
+};
+
+async function fetchProperties(q: string) {
+  const res = await fetch(`/api/properties${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  if (!res.ok) throw new Error('Error al cargar propiedades');
+  return res.json() as Promise<Property[]>;
+}
+
+async function createProperty(data: Partial<Property>) {
+  const res = await fetch('/api/properties', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Error al crear propiedad');
+  return res.json();
+}
+
+const EMPTY: Partial<Property> = {
+  name: '', code: '', propertyType: 'apartamento', address: '', city: '', department: '',
+  stratum: 3, areaSqm: 0, rooms: 0, bathrooms: 1, parkingSpots: 0,
+  status: 'available', monthlyRent: 0,
 };
 
 export default function PropiedadesPage() {
   const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Partial<Property>>(EMPTY);
+  const router = useRouter();
+  const qc = useQueryClient();
 
-  const filtered = PROPERTIES.filter(
-    (p) =>
-      p.name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.address.toLowerCase().includes(search.toLowerCase()) ||
-      p.city.toLowerCase().includes(search.toLowerCase()) ||
-      p.code?.toLowerCase().includes(search.toLowerCase()),
-  );
+  const { data: properties = [], isLoading } = useQuery({
+    queryKey: ['properties', search],
+    queryFn: () => fetchProperties(search),
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: createProperty,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['properties'] });
+      setOpen(false);
+      setForm(EMPTY);
+    },
+  });
+
+  const set = (k: keyof Property, v: string | number) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">
       <Header
         title="Propiedades"
-        subtitle={`${PROPERTIES.length} inmuebles registrados`}
+        subtitle={`${properties.length} inmuebles registrados`}
         action={
-          <Button size="sm">
+          <Button size="sm" onClick={() => setOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             Nueva propiedad
           </Button>
@@ -87,12 +96,11 @@ export default function PropiedadesPage() {
       />
 
       <div className="page-container space-y-5 animate-fade-in">
-        {/* Resumen */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Total', value: PROPERTIES.length, color: 'text-foreground' },
-            { label: 'Arrendadas', value: PROPERTIES.filter((p) => p.status === 'rented').length, color: 'text-primary' },
-            { label: 'Disponibles', value: PROPERTIES.filter((p) => p.status === 'available').length, color: 'text-success' },
+            { label: 'Total', value: properties.length, color: 'text-foreground' },
+            { label: 'Arrendadas', value: properties.filter((p) => p.status === 'rented').length, color: 'text-primary' },
+            { label: 'Disponibles', value: properties.filter((p) => p.status === 'available').length, color: 'text-success' },
           ].map((s) => (
             <Card key={s.label}>
               <CardContent className="p-4 text-center">
@@ -103,7 +111,6 @@ export default function PropiedadesPage() {
           ))}
         </div>
 
-        {/* Filtro */}
         <div className="flex items-center gap-3">
           <Input
             placeholder="Buscar por nombre, código o ciudad..."
@@ -113,79 +120,151 @@ export default function PropiedadesPage() {
           />
         </div>
 
-        {/* Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => {
-            const s = STATUS_MAP[p.status];
-            return (
-              <Card key={p.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-0">
-                  {/* Color strip */}
-                  <div
-                    className={`h-1 rounded-t-lg ${p.status === 'rented' ? 'bg-primary' : p.status === 'available' ? 'bg-success' : 'bg-warning'}`}
-                  />
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground">{p.code}</p>
-                        <p className="font-semibold text-foreground">{p.name}</p>
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {properties.map((p) => {
+              const s = STATUS_MAP[p.status] ?? { label: p.status, variant: 'default' as const };
+              return (
+                <Card
+                  key={p.id}
+                  className="hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => router.push(`/dashboard/propiedades/${p.id}`)}
+                >
+                  <CardContent className="p-0">
+                    <div className={`h-1 rounded-t-lg ${p.status === 'rented' ? 'bg-primary' : p.status === 'available' ? 'bg-success' : 'bg-warning'}`} />
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">{p.code}</p>
+                          <p className="font-semibold text-foreground">{p.name}</p>
+                        </div>
+                        <Badge variant={s.variant}>{s.label}</Badge>
                       </div>
-                      <Badge variant={s.variant}>{s.label}</Badge>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{p.address}</span>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
-                        {TYPE_ICON[p.propertyType] ?? p.propertyType}
-                      </span>
-                      {p.areaSqm && <span>{p.areaSqm} m²</span>}
-                      {p.rooms > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <BedDouble className="h-3 w-3" />
-                          {p.rooms}
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{p.address}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-medium">
+                          {TYPE_ICON[p.propertyType] ?? p.propertyType}
                         </span>
-                      )}
-                      {p.bathrooms > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <Bath className="h-3 w-3" />
-                          {p.bathrooms}
-                        </span>
-                      )}
-                      {p.parkingSpots > 0 && (
-                        <span className="flex items-center gap-0.5">
-                          <Car className="h-3 w-3" />
-                          {p.parkingSpots}
-                        </span>
-                      )}
+                        {p.areaSqm > 0 && <span>{p.areaSqm} m²</span>}
+                        {p.rooms > 0 && <span className="flex items-center gap-0.5"><BedDouble className="h-3 w-3" />{p.rooms}</span>}
+                        {p.bathrooms > 0 && <span className="flex items-center gap-0.5"><Bath className="h-3 w-3" />{p.bathrooms}</span>}
+                        {p.parkingSpots > 0 && <span className="flex items-center gap-0.5"><Car className="h-3 w-3" />{p.parkingSpots}</span>}
+                      </div>
+                      <div className="flex items-center justify-between border-t border-border pt-3">
+                        <span className="text-xs text-muted-foreground">Canon mensual</span>
+                        <span className="text-sm font-semibold text-foreground">{formatCOP(p.monthlyRent)}</span>
+                      </div>
                     </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
-                    <div className="flex items-center justify-between border-t border-border pt-3">
-                      <span className="text-xs text-muted-foreground">Canon mensual</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatCOP(p.monthlyRent)}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {filtered.length === 0 && (
+        {!isLoading && properties.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="text-sm font-medium text-foreground">Sin resultados</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              No se encontraron propiedades con ese criterio
-            </p>
           </div>
         )}
       </div>
+
+      {/* Modal Nueva Propiedad */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nueva propiedad</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="space-y-1">
+              <Label>Nombre</Label>
+              <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ej: Apto 301 Laureles" />
+            </div>
+            <div className="space-y-1">
+              <Label>Código</Label>
+              <Input value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="AP-301" />
+            </div>
+            <div className="space-y-1">
+              <Label>Tipo</Label>
+              <Select value={form.propertyType} onValueChange={(v) => set('propertyType', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="apartamento">Apartamento</SelectItem>
+                  <SelectItem value="casa">Casa</SelectItem>
+                  <SelectItem value="local">Local comercial</SelectItem>
+                  <SelectItem value="bodega">Bodega</SelectItem>
+                  <SelectItem value="oficina">Oficina</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Estado</Label>
+              <Select value={form.status} onValueChange={(v) => set('status', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Disponible</SelectItem>
+                  <SelectItem value="rented">Arrendada</SelectItem>
+                  <SelectItem value="maintenance">Mantenimiento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Dirección</Label>
+              <Input value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Cra 70 #45-20, Apto 301" />
+            </div>
+            <div className="space-y-1">
+              <Label>Ciudad</Label>
+              <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Medellín" />
+            </div>
+            <div className="space-y-1">
+              <Label>Departamento</Label>
+              <Input value={form.department} onChange={(e) => set('department', e.target.value)} placeholder="Antioquia" />
+            </div>
+            <div className="space-y-1">
+              <Label>Estrato</Label>
+              <Input type="number" min={0} max={6} value={form.stratum} onChange={(e) => set('stratum', Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Área (m²)</Label>
+              <Input type="number" min={0} value={form.areaSqm} onChange={(e) => set('areaSqm', Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Habitaciones</Label>
+              <Input type="number" min={0} value={form.rooms} onChange={(e) => set('rooms', Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Baños</Label>
+              <Input type="number" min={0} value={form.bathrooms} onChange={(e) => set('bathrooms', Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Parqueaderos</Label>
+              <Input type="number" min={0} value={form.parkingSpots} onChange={(e) => set('parkingSpots', Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Canon mensual (COP)</Label>
+              <Input type="number" min={0} value={form.monthlyRent} onChange={(e) => set('monthlyRent', Number(e.target.value))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => mutation.mutate(form)}
+              disabled={mutation.isPending || !form.name || !form.address}
+            >
+              {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Guardar propiedad
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
