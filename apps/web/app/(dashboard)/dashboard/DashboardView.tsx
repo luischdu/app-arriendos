@@ -198,7 +198,7 @@ export default function DashboardView() {
                 <CardDescription>Últimas transacciones registradas</CardDescription>
               </div>
               <Button variant="outline" size="sm" asChild>
-                <a href="/pagos">Ver todos</a>
+                <a href="/dashboard/pagos">Ver todos</a>
               </Button>
             </div>
           </CardHeader>
