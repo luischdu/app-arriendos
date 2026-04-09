@@ -9,7 +9,8 @@ export async function readStore<T>(key: string): Promise<T[]> {
     const blob = blobs.find((b) => b.pathname === `${PREFIX}/${key}.json`);
     if (!blob) return [];
 
-    const res = await fetch(blob.url, { cache: 'no-store' });
+    const url = (blob as any).downloadUrl ?? blob.url;
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return [];
     return (await res.json()) as T[];
   } catch {
@@ -21,7 +22,7 @@ export async function readStore<T>(key: string): Promise<T[]> {
 export async function writeStore<T>(key: string, data: T[]): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await put(`${PREFIX}/${key}.json`, JSON.stringify(data), {
-    access: 'public',
+    access: 'private' as any,
     addRandomSuffix: false,
   });
 }
