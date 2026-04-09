@@ -25,8 +25,9 @@ export async function readStore<T>(key: string): Promise<T[]> {
 
 /** Escribe un array JSON en Vercel Blob privado (sobreescribe). */
 export async function writeStore<T>(key: string, data: T[]): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await put(`${PREFIX}/${key}.json`, JSON.stringify(data), {
-    access: 'private',
+    access: 'private' as any,
     addRandomSuffix: false,
   });
 }
