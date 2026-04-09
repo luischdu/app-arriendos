@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Users, Plus, Trash2, Loader2, Shield, User, Eye } from 'lucide-react';
+import { Settings, Users, Plus, Trash2, Loader2, Shield, User, Eye, KeyRound } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,13 +26,17 @@ const ROLE_MAP: Record<string, { label: string; variant: 'default' | 'secondary'
   viewer: { label: 'Consultor', variant: 'secondary', icon: Eye },
 };
 
-const EMPTY_USER = { fullName: '', email: '', role: 'manager', tenantName: 'Inmobiliaria Demo SAS' };
+const EMPTY_USER = { fullName: '', email: '', role: 'manager', tenantName: 'ArriendosPRO' };
+const EMPTY_PWD = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
 export default function ConfiguracionPage() {
   const { user: currentUser } = useAuthStore();
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_USER);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwdForm, setPwdForm] = useState(EMPTY_PWD);
+  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const qc = useQueryClient();
 
   const { data: users = [], isLoading } = useQuery({
@@ -43,6 +47,8 @@ export default function ConfiguracionPage() {
       return res.json() as Promise<AppUser[]>;
     },
   });
+
+  const [createdUser, setCreatedUser] = useState<{ email: string; tempPassword: string } | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof EMPTY_USER) => {
@@ -55,10 +61,11 @@ export default function ConfiguracionPage() {
       if (!res.ok) throw new Error(json.message ?? 'Error al crear usuario');
       return json;
     },
-    onSuccess: () => {
+    onSuccess: (json) => {
       qc.invalidateQueries({ queryKey: ['app-users'] });
       setNewUserOpen(false);
       setForm(EMPTY_USER);
+      if (json.tempPassword) setCreatedUser({ email: json.email, tempPassword: json.tempPassword });
     },
   });
 
@@ -85,6 +92,27 @@ export default function ConfiguracionPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['app-users'] });
       setDeleteId(null);
+    },
+  });
+
+  const changePwdMutation = useMutation({
+    mutationFn: async (data: typeof EMPTY_PWD) => {
+      if (data.newPassword !== data.confirmPassword) throw new Error('Las contraseñas no coinciden');
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: data.currentPassword, newPassword: data.newPassword }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message ?? 'Error');
+      return json;
+    },
+    onSuccess: (json) => {
+      setPwdMsg({ ok: true, text: json.message });
+      setPwdForm(EMPTY_PWD);
+    },
+    onError: (err: Error) => {
+      setPwdMsg({ ok: false, text: err.message });
     },
   });
 
@@ -124,6 +152,12 @@ export default function ConfiguracionPage() {
               <p className="font-medium mt-1 capitalize">{currentUser?.role ?? '—'}</p>
             </div>
           </CardContent>
+          <div className="px-6 pb-5">
+            <Button size="sm" variant="outline" onClick={() => { setPwdMsg(null); setPwdOpen(true); }}>
+              <KeyRound className="mr-1.5 h-4 w-4" />
+              Cambiar contraseña
+            </Button>
+          </div>
         </Card>
 
         {/* Gestión de usuarios */}
@@ -271,6 +305,54 @@ export default function ConfiguracionPage() {
             <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.fullName || !form.email}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Crear usuario
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal credenciales temporales */}
+      <Dialog open={!!createdUser} onOpenChange={() => setCreatedUser(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Usuario creado</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Comparte estas credenciales temporales con el usuario. Debe cambiar la contraseña al ingresar.</p>
+            <div className="rounded-lg bg-muted p-4 space-y-2">
+              <p className="text-sm"><span className="text-muted-foreground">Email:</span> <strong>{createdUser?.email}</strong></p>
+              <p className="text-sm"><span className="text-muted-foreground">Contraseña temporal:</span> <strong className="font-mono">{createdUser?.tempPassword}</strong></p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCreatedUser(null)}>Entendido</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Cambiar Contraseña */}
+      <Dialog open={pwdOpen} onOpenChange={(o) => { setPwdOpen(o); setPwdMsg(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Cambiar contraseña</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label>Contraseña actual</Label>
+              <Input type="password" value={pwdForm.currentPassword} onChange={(e) => setPwdForm((f) => ({ ...f, currentPassword: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Nueva contraseña</Label>
+              <Input type="password" value={pwdForm.newPassword} onChange={(e) => setPwdForm((f) => ({ ...f, newPassword: e.target.value }))} placeholder="Mínimo 8 caracteres" />
+            </div>
+            <div className="space-y-1">
+              <Label>Confirmar contraseña</Label>
+              <Input type="password" value={pwdForm.confirmPassword} onChange={(e) => setPwdForm((f) => ({ ...f, confirmPassword: e.target.value }))} />
+            </div>
+            {pwdMsg && (
+              <p className={`text-xs ${pwdMsg.ok ? 'text-success' : 'text-destructive'}`}>{pwdMsg.text}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPwdOpen(false)}>Cancelar</Button>
+            <Button onClick={() => changePwdMutation.mutate(pwdForm)} disabled={changePwdMutation.isPending || !pwdForm.currentPassword || !pwdForm.newPassword}>
+              {changePwdMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Actualizar contraseña
             </Button>
           </DialogFooter>
         </DialogContent>

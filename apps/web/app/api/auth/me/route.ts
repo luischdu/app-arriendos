@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { readStore } from '@/lib/store';
+import { verifyToken } from '@/lib/auth-utils';
 
 export async function GET() {
   const cookieStore = cookies();
@@ -9,21 +11,18 @@ export async function GET() {
     return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
   }
 
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString());
-    if (payload.exp < Date.now()) {
-      return NextResponse.json({ message: 'Token expirado' }, { status: 401 });
-    }
-  } catch {
-    return NextResponse.json({ message: 'Token inválido' }, { status: 401 });
+  const payload = verifyToken(token);
+  if (!payload) {
+    return NextResponse.json({ message: 'Token inválido o expirado' }, { status: 401 });
   }
 
-  return NextResponse.json({
-    id: 'demo-user-001',
-    email: 'demo@arriendospro.com',
-    fullName: 'Carlos Propietario',
-    role: 'admin',
-    tenantId: 'demo-tenant-001',
-    tenantName: 'Inmobiliaria Demo SAS',
-  });
+  const users = await readStore<Record<string, any>>('auth_users');
+  const user = users.find((u: any) => u.id === payload.sub);
+
+  if (!user || user.status === 'inactive') {
+    return NextResponse.json({ message: 'No autorizado' }, { status: 401 });
+  }
+
+  const { passwordHash: _ph, ...safeUser } = user;
+  return NextResponse.json(safeUser);
 }
